@@ -1,0 +1,38 @@
+name: Ape X iOS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Ape X build spec (JSON)"
+        required: true
+      build_id:
+        description: "Ape X build ID"
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write build spec
+        run: echo '${{ inputs.spec }}' > spec.json
+
+      - name: Generate iOS project
+        run: python3 tools/generate_ios_project.py spec.json App
+
+      - name: Build IPA (unsigned)
+        run: |
+          xcodebuild -workspace App/App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos \
+            -archivePath App.xcarchive archive \
+            CODE_SIGNING_ALLOWED=NO
+          mkdir -p Payload && cp -r App.xcarchive/Products/Applications/*.app Payload/
+          zip -r App.ipa Payload
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-${{ inputs.build_id }}
+          path: App.ipa
