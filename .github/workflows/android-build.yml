@@ -1,0 +1,49 @@
+name: Ape X Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Ape X build spec (JSON)"
+        required: true
+      build_id:
+        description: "Ape X build ID"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write build spec
+        run: echo '${{ inputs.spec }}' > spec.json
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Android project
+        run: |
+          python3 tools/generate_project.py spec.json app
+        working-directory: .
+
+      - name: Build artifact
+        working-directory: app
+        run: |
+          ARTIFACT=$(python3 -c "import json;print(json.load(open('../spec.json'))['artifact'])")
+          chmod +x gradlew
+          if [ "$ARTIFACT" = "aab" ]; then ./gradlew bundleRelease; else ./gradlew assembleRelease; fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-${{ inputs.build_id }}
+          path: |
+            app/app/build/outputs/apk/release/*.apk
+            app/app/build/outputs/bundle/release/*.aab
