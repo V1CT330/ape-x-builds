@@ -28,13 +28,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
 
       - name: Generate Android project
+        env:
+          SDK: ${{ env.ANDROID_HOME }}
         run: python3 tools/generate_project.py spec.json app
 
       # Signing layer: uses your keystore secret if present, else a throwaway test key.
