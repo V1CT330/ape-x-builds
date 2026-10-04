@@ -13,37 +13,47 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      APEX_KEYSTORE_B64: ${{ secrets.APEX_KEYSTORE_B64 }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Write build spec
-        run: echo '${{ inputs.spec }}' > spec.json
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: printf '%s' "$SPEC" > spec.json
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
 
       - name: Generate Android project
+        run: python3 tools/generate_project.py spec.json app
+
+      # Signing layer: uses your keystore secret if present, else a throwaway test key.
+      - name: Prepare signing key
+        working-directory: app/app
         run: |
-          python3 tools/generate_project.py spec.json app
-        working-directory: .
+          if [ -n "$APEX_KEYSTORE_B64" ]; then echo "$APEX_KEYSTORE_B64" | base64 -d > apex.keystore
+          else keytool -genkeypair -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Test"; fi
 
       - name: Build artifact
         working-directory: app
         run: |
-          ARTIFACT=$(python3 -c "import json;print(json.load(open('../spec.json'))['artifact'])")
-          chmod +x gradlew
-          if [ "$ARTIFACT" = "aab" ]; then ./gradlew bundleRelease; else ./gradlew assembleRelease; fi
+          ARTIFACT=$(python3 -c "import json;print(json.load(open('../spec.json')).get('artifact','apk'))")
+          if [ "$ARTIFACT" = "aab" ]; then gradle --no-daemon bundleRelease; else gradle --no-daemon assembleRelease; fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: apex-${{ inputs.build_id }}
+          if-no-files-found: error
           path: |
             app/app/build/outputs/apk/release/*.apk
             app/app/build/outputs/bundle/release/*.aab
