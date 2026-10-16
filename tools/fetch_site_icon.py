@@ -54,14 +54,23 @@ def validate_url(url, hosts):
     host = parsed.hostname.lower().rstrip(".")
     if not allowed_host(host, hosts):
         raise ValueError("icon URL host is not in the website allowlist")
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".localhost", ".local", ".internal", ".test")):
+        raise ValueError("local and internal hosts are not allowed for icon downloads")
     try:
         ip = ipaddress.ip_address(host)
         if not ip.is_global:
             raise ValueError("private or reserved IP addresses are not allowed for icon downloads")
+        return url
     except ValueError as exc:
         if "not allowed" in str(exc):
             raise
-        # A normal DNS hostname is expected to fail ip_address parsing.
+        # For DNS names, reject any private/reserved address returned by DNS.
+    try:
+        addresses = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError(f"icon host could not be resolved: {host}") from exc
+    if not addresses or any(not ipaddress.ip_address(item[4][0].split("%")[0]).is_global for item in addresses):
+        raise ValueError("icon host resolves to a private or reserved IP address")
     return url
 
 
@@ -156,9 +165,7 @@ def main():
         if explicit:
             candidates = [urljoin(start_url, explicit)]
         else:
-            page_bytes, content_type = fetch(start_url, hosts, MAX_PAGE_BYTES)
-            if "html" not in content_type and page_bytes.lstrip()[:20].lower().startswith(b"<!doctype"):
-                pass
+            page_bytes, _ = fetch(start_url, hosts, MAX_PAGE_BYTES)
             candidates = icon_candidates(start_url, page_bytes, hosts)
 
         last_error = None
