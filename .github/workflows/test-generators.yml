@@ -18,8 +18,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install icon processing dependency
+        run: python -m pip install --disable-pip-version-check Pillow
       - name: Compile generator scripts
-        run: python -m py_compile tools/generate_project.py tools/generate_ios_project.py tests/test_generators.py
+        run: python -m py_compile tools/generate_project.py tools/generate_ios_project.py tools/fetch_site_icon.py tests/test_generators.py tests/test_site_icon.py
       - name: Run generator smoke tests
         run: python -m unittest discover -s tests -v
       - uses: actions/setup-java@v4
