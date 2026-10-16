@@ -62,6 +62,28 @@ class GeneratorSmokeTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("HTTPS", result.stderr)
 
+    def test_android_rejects_invalid_version_name(self):
+        spec = json.loads(json.dumps(SPEC))
+        spec["application"]["versionName"] = "1.0'; throw new Error('bad"
+        result, _ = self.run_generator("tools/generate_project.py", spec)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid versionName", result.stderr)
+
+    def test_android_rejects_min_sdk_above_target(self):
+        spec = json.loads(json.dumps(SPEC))
+        spec["application"]["minSdk"] = 35
+        spec["application"]["targetSdk"] = 24
+        result, _ = self.run_generator("tools/generate_project.py", spec)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("minSdk cannot be greater", result.stderr)
+
+    def test_android_rejects_invalid_external_link_mode(self):
+        spec = json.loads(json.dumps(SPEC))
+        spec["webview"]["externalLinks"] = "unknown"
+        result, _ = self.run_generator("tools/generate_project.py", spec)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("externalLinks must be", result.stderr)
+
     def test_ios_generates_project_sources(self):
         result, files = self.run_generator("tools/generate_ios_project.py", SPEC)
         self.assertEqual(result.returncode, 0, result.stderr)
