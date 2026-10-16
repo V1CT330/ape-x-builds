@@ -19,10 +19,29 @@ if parsed_url.scheme not in ("https", "http") or not parsed_url.hostname:
     sys.exit(f"invalid start url: {url!r}")
 if parsed_url.scheme != "https":
     sys.exit("startUrl must use HTTPS; cleartext HTTP is not supported")
-name = (app.get("name") or "Ape X App").replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'")
+name = str(app.get("name") or "Ape X App")
+name = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", name).strip()[:80] or "Ape X App"
+name = name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 theme = look.get("themeColor") or "#0F172A"
 if not re.fullmatch(r"#[0-9a-fA-F]{6}", theme):
     theme = "#0F172A"
+def positive_int(value, default, key, maximum):
+    try:
+        result = int(value if value is not None else default)
+    except (TypeError, ValueError):
+        sys.exit(f"{key} must be an integer")
+    if result < 1 or result > maximum:
+        sys.exit(f"{key} must be between 1 and {maximum}")
+    return result
+
+min_sdk = positive_int(app.get("minSdk"), 24, "minSdk", 35)
+target_sdk = positive_int(app.get("targetSdk"), 35, "targetSdk", 35)
+if min_sdk > target_sdk:
+    sys.exit("minSdk cannot be greater than targetSdk")
+version_code = positive_int(app.get("versionCode"), 1, "versionCode", 2100000000)
+version_name = str(app.get("versionName") or "1.0.0")
+if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+_-]{0,49}", version_name):
+    sys.exit(f"invalid versionName: {version_name!r}")
 orient = {"portrait": "portrait", "landscape": "landscape"}.get(look.get("orientation"), "unspecified")
 full = bool(look.get("fullscreen"))
 hosts = [str(h).strip().lower() for h in (web.get("allowedHosts") or []) if str(h).strip()]
@@ -32,8 +51,13 @@ for host in hosts:
     if not re.fullmatch(r"[a-z0-9.-]+", host) or host.startswith(".") or host.endswith(".") or ".." in host:
         sys.exit(f"invalid allowed host: {host!r}")
 ext = web.get("externalLinks") or "browser"
+if ext not in ("browser", "inapp"):
+    sys.exit("externalLinks must be 'browser' or 'inapp'")
 back = web.get("backButton") or "history"
-ua = web.get("userAgentSuffix") or "ApeX/1.0"
+if back not in ("history", "exit"):
+    sys.exit("backButton must be 'history' or 'exit'")
+ua = str(web.get("userAgentSuffix") or "ApeX/1.0")
+ua = re.sub(r"[\r\n]", "", ua)[:80]
 
 def w(p, s):
     f = out / p
@@ -50,13 +74,13 @@ w("gradle.properties", "android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2g\n")
 w("app/build.gradle", f"""plugins {{ id 'com.android.application' }}
 android {{
   namespace '{pkg}'
-  compileSdk {app.get('targetSdk', 35)}
+  compileSdk {target_sdk}
   defaultConfig {{
     applicationId '{pkg}'
-    minSdk {app.get('minSdk', 24)}
-    targetSdk {app.get('targetSdk', 35)}
-    versionCode {int(app.get('versionCode') or 1)}
-    versionName '{app.get('versionName') or '1.0.0'}'
+    minSdk {min_sdk}
+    targetSdk {target_sdk}
+    versionCode {version_code}
+    versionName '{version_name}'
   }}
   signingConfigs {{
     release {{
