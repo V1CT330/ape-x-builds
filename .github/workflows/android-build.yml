@@ -114,7 +114,11 @@ jobs:
           if [ "$ARTIFACT" = "apk" ]; then
             APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -size +0c -print -quit)
             test -n "$APK"
-            apksigner verify --verbose --print-certs "$APK"
+            SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            test -n "$SDK_ROOT"
+            APKSIGNER=$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)
+            test -x "$APKSIGNER"
+            "$APKSIGNER" verify --verbose --print-certs "$APK"
           else
             AAB=$(find app/build/outputs/bundle/release -maxdepth 1 -name '*.aab' -size +0c -print -quit)
             test -n "$AAB"
