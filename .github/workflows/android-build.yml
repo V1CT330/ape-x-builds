@@ -56,8 +56,14 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Install icon processing dependency
+        run: python3 -m pip install --disable-pip-version-check Pillow
+
       - name: Generate Android project
         run: python3 tools/generate_project.py spec.json app
+
+      - name: Apply website launcher icon when available
+        run: python3 tools/fetch_site_icon.py spec.json app
 
       - name: Prepare signing key
         working-directory: app/app
