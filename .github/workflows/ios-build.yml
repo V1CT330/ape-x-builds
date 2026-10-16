@@ -6,54 +6,184 @@ on:
       spec:
         description: "Ape X build spec (JSON)"
         required: true
+        type: string
       build_id:
         description: "Ape X build ID"
         required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: macos-latest
+    timeout-minutes: 35
     env:
       APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE_B64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write build spec
+      - name: Validate build request and write spec
         env:
           SPEC: ${{ inputs.spec }}
-        run: printf '%s' "$SPEC" > spec.json
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          spec = json.loads(os.environ["SPEC"])
+          if not isinstance(spec, dict):
+              raise SystemExit("Build spec must be a JSON object")
+          if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", os.environ["BUILD_ID"]):
+              raise SystemExit("build_id may contain only letters, digits, dot, underscore, and hyphen (max 80 chars)")
+          with open("spec.json", "w", encoding="utf-8") as f:
+              json.dump(spec, f)
+          PY
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
       - name: Generate iOS project
         run: |
-          brew install xcodegen
+          set -euo pipefail
           python3 tools/generate_ios_project.py spec.json ios
-          cd ios && xcodegen generate
+          (cd ios && xcodegen generate)
 
-      - name: Build unsigned app
-        working-directory: ios
+      - name: Validate Apple signing configuration
+        id: signing
         run: |
-          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+          set -euo pipefail
+          configured=0
+          for name in APPLE_CERT_P12 APPLE_CERT_PASSWORD APPLE_PROVISIONING_PROFILE_B64 APPLE_TEAM_ID; do
+            if [ -n "${!name}" ]; then configured=$((configured + 1)); fi
+          done
+          if [ "$configured" -ne 0 ] && [ "$configured" -ne 4 ]; then
+            echo "::error::Configure all four Apple signing secrets or leave all four empty."
+            exit 1
+          fi
+          if [ "$configured" -eq 4 ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple signing secrets are absent; this run will produce an unsigned development IPA, not an installable App Store build."
+          fi
+
+      - name: Install Apple signing assets
+        if: steps.signing.outputs.enabled == 'true'
+        id: apple
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/apex-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          CERT_PATH="$RUNNER_TEMP/apple-distribution.p12"
+          PROFILE_PATH="$RUNNER_TEMP/apex.mobileprovision"
+          printf '%s' "$APPLE_CERT_P12" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE_B64" | base64 --decode > "$PROFILE_PATH"
+          test -s "$CERT_PATH"
+          test -s "$PROFILE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$PROFILE_PLIST")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$PROFILE_PLIST")
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          BUNDLE_ID=$(python3 -c 'import json; s=json.load(open("spec.json")); print((s.get("ios") or {}).get("bundleId") or (s.get("application") or {}).get("applicationId") or "")')
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST")
+          case "$PROFILE_APP_ID" in "$APPLE_TEAM_ID.$BUNDLE_ID"|"$APPLE_TEAM_ID".*) ;; *) echo "::error::Provisioning profile does not match the configured team and bundle ID."; exit 1 ;; esac
+          echo "profile_uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+          echo "profile_name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "keychain_path=$KEYCHAIN_PATH" >> "$GITHUB_OUTPUT"
+          echo "keychain_password=$KEYCHAIN_PASSWORD" >> "$GITHUB_OUTPUT"
+          echo "bundle_id=$BUNDLE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and export signed IPA
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          PROFILE_UUID: ${{ steps.apple.outputs.profile_uuid }}
+          KEYCHAIN_PATH: ${{ steps.apple.outputs.keychain_path }}
+          BUNDLE_ID: ${{ steps.apple.outputs.bundle_id }}
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/App.xcodeproj -scheme App -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+            -archivePath "$RUNNER_TEMP/ApeX.xcarchive" archive \
+            CODE_SIGN_STYLE=Manual CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGN_IDENTITY="Apple Distribution" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>signingStyle</key><string>manual</string>
+          <key>teamID</key><string>$APPLE_TEAM_ID</string>
+          <key>provisioningProfiles</key><dict><key>$BUNDLE_ID</key><string>$PROFILE_UUID</string></dict>
+          <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/ApeX.xcarchive" \
+            -exportPath out -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          IPA=$(find out -maxdepth 1 -name '*.ipa' -size +0c -print -quit)
+          test -n "$IPA"
+          unzip -t "$IPA"
+          echo "APEX_SIGNING_MODE=app-store-signed" >> "$GITHUB_ENV"
 
-      - name: Package unsigned IPA and Xcode project
+      - name: Build and package unsigned IPA
+        if: steps.signing.outputs.enabled == 'false'
         run: |
+          set -euo pipefail
+          xcodebuild -project ios/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/ApeXBuild" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
           mkdir -p out/Payload
-          cp -R ios/build/Build/Products/Release-iphoneos/App.app out/Payload/
-          (cd out && zip -qry App-unsigned.ipa Payload && rm -rf Payload)
-          rm -rf ios/build
+          APP_PATH="$RUNNER_TEMP/ApeXBuild/Build/Products/Release-iphoneos/App.app"
+          test -d "$APP_PATH"
+          cp -R "$APP_PATH" out/Payload/
+          (cd out && zip -qry App-unsigned.ipa Payload)
+          rm -rf out/Payload
+          echo "APEX_SIGNING_MODE=unsigned-development" >> "$GITHUB_ENV"
+
+      - name: Package generated Xcode project
+        run: |
+          set -euo pipefail
           zip -qry out/App-xcode-project.zip ios
-          ls -la out
+          test -s out/App-xcode-project.zip
+          ls -lh out
 
-      # Signing layer (separate): runs only when Apple credentials are added
-      # as repository secrets. Without them the unsigned IPA is the result.
-      - name: Signing (optional)
-        if: ${{ env.APPLE_CERT_P12 != '' }}
-        run: echo "Apple signing credentials detected — signing step to be configured."
+      - name: Verify IPA structure
+        run: |
+          set -euo pipefail
+          IPA=$(find out -maxdepth 1 -name '*.ipa' -size +0c -print -quit)
+          test -n "$IPA"
+          unzip -t "$IPA"
+          unzip -Z1 "$IPA" | grep -q '^Payload/App.app/Info.plist$'
 
-      - name: Upload artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apex-${{ inputs.build_id }}
-          path: out/*
+          name: apex-${{ inputs.build_id }}-${{ env.APEX_SIGNING_MODE }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            out/*.ipa
+            out/*.zip
+
+      - name: Clean up signing assets
+        if: always() && steps.signing.outputs.enabled == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/apex-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/apple-distribution.p12" "$RUNNER_TEMP/apex.mobileprovision" "$RUNNER_TEMP/profile.plist"

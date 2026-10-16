@@ -7,6 +7,7 @@ Writes a complete WKWebView iOS app (Swift sources, Info.plist, asset
 catalog) plus an XcodeGen project.yml. Signing is NOT configured here —
 it is a separate layer applied later by the workflow when credentials exist.
 """
+import html
 import json
 import re
 import sys
@@ -40,8 +41,8 @@ def main():
         sys.exit(f"invalid bundle id: {bundle!r}")
     bundle = bundle.replace("_", "-")
     start_url = web.get("startUrl")
-    if not start_url or not start_url.startswith(("https://", "http://")):
-        sys.exit(f"invalid start url: {start_url!r}")
+    if not start_url or not start_url.startswith("https://"):
+        sys.exit(f"invalid start url (HTTPS required): {start_url!r}")
     min_os = ios.get("minimumOS") or "15.0"
     version = app.get("versionName") or "1.0.0"
     build_no = str(app.get("versionCode") or 1)
@@ -153,14 +154,14 @@ struct WebView: UIViewRepresentable {{
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
-<key>CFBundleDisplayName</key><string>{name.replace('&', '&amp;').replace('<', '&lt;')}</string>
+<key>CFBundleDisplayName</key><string>{html.escape(str(name), quote=False)}</string>
 <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
 <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>{version}</string>
-<key>CFBundleVersion</key><string>{build_no}</string>
+<key>CFBundleShortVersionString</key><string>{html.escape(str(version), quote=False)}</string>
+<key>CFBundleVersion</key><string>{html.escape(str(build_no), quote=False)}</string>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>UILaunchScreen</key><dict/>
 <key>UIStatusBarHidden</key>{"<true/>" if fullscreen else "<false/>"}
