@@ -40,17 +40,20 @@ class GeneratorSmokeTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
-            return result, output
+            files = {
+                str(path.relative_to(output)): path.read_text(encoding="utf-8", errors="replace")
+                for path in output.rglob("*") if path.is_file()
+            } if output.exists() else {}
+            return result, files
 
     def test_android_generates_required_files_and_defaults_host(self):
-        result, output = self.run_generator("tools/generate_project.py", SPEC)
+        result, files = self.run_generator("tools/generate_project.py", SPEC)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((output / "app/build.gradle").is_file())
-        self.assertTrue((output / "app/src/main/AndroidManifest.xml").is_file())
-        self.assertTrue((output / "app/src/main/res/mipmap/ic_launcher.xml").is_file())
-        activity = output / "app/src/main/java/mw/apex/smoketest/MainActivity.java"
-        self.assertTrue(activity.is_file())
-        self.assertIn('"example.com"', activity.read_text(encoding="utf-8"))
+        self.assertIn("app/build.gradle", files)
+        self.assertIn("app/src/main/AndroidManifest.xml", files)
+        self.assertIn("app/src/main/res/mipmap/ic_launcher.xml", files)
+        self.assertIn("app/src/main/java/mw/apex/smoketest/MainActivity.java", files)
+        self.assertIn('"example.com"', files["app/src/main/java/mw/apex/smoketest/MainActivity.java"])
 
     def test_android_rejects_http_start_url(self):
         spec = json.loads(json.dumps(SPEC))
@@ -60,11 +63,11 @@ class GeneratorSmokeTests(unittest.TestCase):
         self.assertIn("HTTPS", result.stderr)
 
     def test_ios_generates_project_sources(self):
-        result, output = self.run_generator("tools/generate_ios_project.py", SPEC)
+        result, files = self.run_generator("tools/generate_ios_project.py", SPEC)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((output / "project.yml").is_file())
-        self.assertTrue((output / "App/AppMain.swift").is_file())
-        self.assertTrue((output / "App/Info.plist").is_file())
+        self.assertIn("project.yml", files)
+        self.assertIn("App/AppMain.swift", files)
+        self.assertIn("App/Info.plist", files)
 
 
 if __name__ == "__main__":
