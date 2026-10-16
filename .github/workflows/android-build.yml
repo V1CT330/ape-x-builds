@@ -103,8 +103,18 @@ jobs:
         working-directory: app
         run: |
           set -euo pipefail
-          printf 'Signing mode: %s\n' "$APEX_SIGNING_MODE"
-          find app/build/outputs -type f \( -name '*.apk' -o -name '*.aab' \) -size +0c -print
+          printf 'Signing mode: %s\\n' "$APEX_SIGNING_MODE"
+          ARTIFACT=$(python3 -c "import json; print(json.load(open('../spec.json')).get('artifact', 'apk'))")
+          if [ "$ARTIFACT" = "apk" ]; then
+            APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -size +0c -print -quit)
+            test -n "$APK"
+            apksigner verify --verbose --print-certs "$APK"
+          else
+            AAB=$(find app/build/outputs/bundle/release -maxdepth 1 -name '*.aab' -size +0c -print -quit)
+            test -n "$AAB"
+            jarsigner -verify "$AAB"
+          fi
+          find app/build/outputs -type f \\( -name '*.apk' -o -name '*.aab' \\) -size +0c -print
 
       - uses: actions/upload-artifact@v4
         with:
