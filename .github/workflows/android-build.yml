@@ -61,6 +61,11 @@ jobs:
           else
             echo "::warning::No production keystore configured. This build will use a temporary test signing key and is not suitable for production updates."
             keytool -genkeypair -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Test"
+            {
+              echo "APEX_KEYSTORE_PASSWORD=apexbuild"
+              echo "APEX_KEY_ALIAS=apex"
+              echo "APEX_KEY_PASSWORD=apexbuild"
+            } >> "$GITHUB_ENV"
           fi
 
       - name: Build artifact
