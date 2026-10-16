@@ -36,5 +36,19 @@ jobs:
       - name: Compile generated Android app
         working-directory: android-smoke
         run: gradle --no-daemon assembleDebug
-      - name: Verify generated APK
+      - name: Verify generated debug APK
         run: test -s android-smoke/app/build/outputs/apk/debug/app-debug.apk
+      - name: Prepare temporary CI signing key
+        working-directory: android-smoke/app
+        run: keytool -genkeypair -noprompt -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X CI Test"
+      - name: Compile generated release APK
+        working-directory: android-smoke
+        run: gradle --no-daemon assembleRelease
+      - name: Verify signed release APK
+        run: |
+          set -euo pipefail
+          APK=android-smoke/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          APKSIGNER=$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT}}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
