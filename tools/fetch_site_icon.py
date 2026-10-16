@@ -74,13 +74,25 @@ def validate_url(url, hosts):
     return url
 
 
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, hosts):
+        super().__init__()
+        self.hosts = hosts
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Validate the redirect target before urllib issues a request to it.
+        validate_url(newurl, self.hosts)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch(url, hosts, limit):
     validate_url(url, hosts)
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "ApeX-IconFetcher/1.0", "Accept": "text/html,image/*,*/*;q=0.5"},
     )
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+    opener = urllib.request.build_opener(SafeRedirectHandler(hosts))
+    with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
         final_url = response.geturl()
         validate_url(final_url, hosts)
         data = response.read(limit + 1)
