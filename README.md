@@ -26,6 +26,7 @@ Example build spec:
 {
   "application": {
     "name": "My Website",
+    "iconUrl": "https://example.com/favicon.png",
     "applicationId": "mw.example.mywebsite",
     "versionName": "1.0.0",
     "versionCode": 1,
@@ -65,4 +66,4 @@ The workflow validates the configured keystore and verifies the signature on the
 
 Successful runs upload the APK or AAB as a GitHub Actions artifact for seven days. This runner alone does not implement customer accounts, payment collection/verification, per-customer build ownership, website-side status polling, or authenticated customer download links. Those features must be implemented in the Ape X web application/backend, with payment verified server-side before a customer's build becomes downloadable.
 
-The website's logo/icon still needs a dedicated asset-input or favicon-fetching feature; the current generator creates a generic fallback icon.
+The build attempts to use the site's favicon as the launcher icon. You can optionally set `application.iconUrl` to a public HTTPS image hosted on the start URL's host or another configured allowed host. The icon downloader rejects non-HTTPS, disallowed, private, and internal hosts; if no usable icon is available, the generic fallback icon is retained.
