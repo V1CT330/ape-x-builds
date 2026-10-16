@@ -129,6 +129,7 @@ def save_icons(icon_bytes, out):
         square.resize((size, size), Image.Resampling.LANCZOS).save(folder / "ic_launcher.png", format="PNG", optimize=True)
 
     adaptive = out / "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+    adaptive.parent.mkdir(parents=True, exist_ok=True)
     adaptive.write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">'
