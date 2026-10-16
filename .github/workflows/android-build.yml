@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APEX_KEYSTORE_B64: ${{ secrets.APEX_KEYSTORE_B64 }}
+      APEX_KEYSTORE_PASSWORD: ${{ secrets.APEX_KEYSTORE_PASSWORD }}
+      APEX_KEY_ALIAS: ${{ secrets.APEX_KEY_ALIAS }}
+      APEX_KEY_PASSWORD: ${{ secrets.APEX_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,18 +40,41 @@ jobs:
           SDK: ${{ env.ANDROID_HOME }}
         run: python3 tools/generate_project.py spec.json app
 
-      # Signing layer: uses your keystore secret if present, else a throwaway test key.
+      # A production keystore must include its matching password and alias secrets.
+      # Without a production keystore, create a throwaway key for test builds only.
       - name: Prepare signing key
         working-directory: app/app
+        shell: bash
         run: |
-          if [ -n "$APEX_KEYSTORE_B64" ]; then echo "$APEX_KEYSTORE_B64" | base64 -d > apex.keystore
-          else keytool -genkeypair -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Test"; fi
+          if [ -n "$APEX_KEYSTORE_B64" ]; then
+            for secret_name in APEX_KEYSTORE_PASSWORD APEX_KEY_ALIAS APEX_KEY_PASSWORD; do
+              if [ -z "${!secret_name}" ]; then
+                echo "::error::APEX_KEYSTORE_B64 is set but $secret_name is missing. Configure all four signing secrets."
+                exit 1
+              fi
+            done
+            printf '%s' "$APEX_KEYSTORE_B64" | base64 --decode > apex.keystore
+            if [ ! -s apex.keystore ]; then
+              echo "::error::APEX_KEYSTORE_B64 did not decode to a non-empty keystore."
+              exit 1
+            fi
+          else
+            echo "::warning::No production keystore configured. This build will use a temporary test signing key and is not suitable for production updates."
+            keytool -genkeypair -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Test"
+          fi
 
       - name: Build artifact
         working-directory: app
         run: |
           ARTIFACT=$(python3 -c "import json;print(json.load(open('../spec.json')).get('artifact','apk'))")
-          if [ "$ARTIFACT" = "aab" ]; then gradle --no-daemon bundleRelease; else gradle --no-daemon assembleRelease; fi
+          if [ "$ARTIFACT" = "aab" ]; then
+            gradle --no-daemon bundleRelease
+          elif [ "$ARTIFACT" = "apk" ]; then
+            gradle --no-daemon assembleRelease
+          else
+            echo "::error::Unsupported artifact type '$ARTIFACT'. Use 'apk' or 'aab'."
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
