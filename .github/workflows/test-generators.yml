@@ -12,7 +12,7 @@ permissions:
 jobs:
   test-generators:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,6 +49,16 @@ jobs:
           set -euo pipefail
           APK=android-smoke/app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
-          APKSIGNER=$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT}}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)
+          APKSIGNER=$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT}}" -type f -name apksigner -print | sort -V | tail -n 1)
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
+      - name: Compile release Android App Bundle
+        working-directory: android-smoke
+        run: gradle --no-daemon bundleRelease
+      - name: Verify signed Android App Bundle
+        run: |
+          set -euo pipefail
+          AAB=android-smoke/app/build/outputs/bundle/release/app-release.aab
+          test -s "$AAB"
+          jarsigner -verify "$AAB"
+          unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\\.(SF|RSA|DSA)$'
