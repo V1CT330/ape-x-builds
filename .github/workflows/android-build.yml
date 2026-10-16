@@ -70,6 +70,7 @@ jobs:
             test -n "$APEX_KEY_PASSWORD" || { echo "::error::APEX_KEY_PASSWORD is required when APEX_KEYSTORE_B64 is configured"; exit 1; }
             printf '%s' "$APEX_KEYSTORE_B64" | base64 --decode > apex.keystore
             test -s apex.keystore
+            keytool -list -keystore apex.keystore -storepass "$APEX_KEYSTORE_PASSWORD" -alias "$APEX_KEY_ALIAS" >/dev/null
             echo "APEX_SIGNING_MODE=production" >> "$GITHUB_ENV"
           else
             export APEX_KEYSTORE_PASSWORD=apexbuild
