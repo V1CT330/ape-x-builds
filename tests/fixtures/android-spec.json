@@ -1,0 +1,22 @@
+{
+  "application": {
+    "name": "Ape X CI Smoke Test",
+    "applicationId": "mw.apex.ci.smoketest",
+    "versionName": "1.0.0",
+    "versionCode": 1,
+    "minSdk": 24,
+    "targetSdk": 35
+  },
+  "webview": {
+    "startUrl": "https://example.com",
+    "allowedHosts": [],
+    "externalLinks": "browser",
+    "backButton": "history"
+  },
+  "appearance": {
+    "themeColor": "#123456",
+    "orientation": "portrait",
+    "fullscreen": false
+  },
+  "artifact": "apk"
+}

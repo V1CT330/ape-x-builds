@@ -1,0 +1,54 @@
+name: Ape X Generator Tests
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-generators:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install icon processing dependency
+        run: python -m pip install --disable-pip-version-check Pillow
+      - name: Compile generator scripts
+        run: python -m py_compile tools/generate_project.py tools/generate_ios_project.py tools/fetch_site_icon.py tests/test_generators.py tests/test_site_icon.py
+      - name: Run generator smoke tests
+        run: python -m unittest discover -s tests -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Generate Android smoke-test project
+        run: python tools/generate_project.py tests/fixtures/android-spec.json android-smoke
+      - name: Compile generated Android app
+        working-directory: android-smoke
+        run: gradle --no-daemon assembleDebug
+      - name: Verify generated debug APK
+        run: test -s android-smoke/app/build/outputs/apk/debug/app-debug.apk
+      - name: Prepare temporary CI signing key
+        working-directory: android-smoke/app
+        run: keytool -genkeypair -noprompt -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X CI Test"
+      - name: Compile generated release APK
+        working-directory: android-smoke
+        run: gradle --no-daemon assembleRelease
+      - name: Verify signed release APK
+        run: |
+          set -euo pipefail
+          APK=android-smoke/app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          APKSIGNER=$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT}}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"

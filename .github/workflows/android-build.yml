@@ -6,22 +6,46 @@ on:
       spec:
         description: "Ape X build spec (JSON)"
         required: true
+        type: string
       build_id:
         description: "Ape X build ID"
         required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       APEX_KEYSTORE_B64: ${{ secrets.APEX_KEYSTORE_B64 }}
+      APEX_KEYSTORE_PASSWORD: ${{ secrets.APEX_KEYSTORE_PASSWORD }}
+      APEX_KEY_ALIAS: ${{ secrets.APEX_KEY_ALIAS }}
+      APEX_KEY_PASSWORD: ${{ secrets.APEX_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write build spec
+      - name: Test project generators
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validate build request and write spec
         env:
           SPEC: ${{ inputs.spec }}
-        run: printf '%s' "$SPEC" > spec.json
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          raw = os.environ["SPEC"]
+          spec = json.loads(raw)
+          if not isinstance(spec, dict):
+              raise SystemExit("Build spec must be a JSON object")
+          if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", os.environ["BUILD_ID"]):
+              raise SystemExit("build_id may contain only letters, digits, dot, underscore, and hyphen (max 80 chars)")
+          with open("spec.json", "w", encoding="utf-8") as f:
+              json.dump(spec, f)
+          PY
 
       - uses: actions/setup-java@v4
         with:
@@ -32,28 +56,81 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Install icon processing dependency
+        run: python3 -m pip install --disable-pip-version-check Pillow
+
       - name: Generate Android project
-        env:
-          SDK: ${{ env.ANDROID_HOME }}
         run: python3 tools/generate_project.py spec.json app
 
-      # Signing layer: uses your keystore secret if present, else a throwaway test key.
+      - name: Apply website launcher icon when available
+        run: python3 tools/fetch_site_icon.py spec.json app
+
       - name: Prepare signing key
         working-directory: app/app
+        shell: bash
         run: |
-          if [ -n "$APEX_KEYSTORE_B64" ]; then echo "$APEX_KEYSTORE_B64" | base64 -d > apex.keystore
-          else keytool -genkeypair -keystore apex.keystore -storepass apexbuild -keypass apexbuild -alias apex -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Test"; fi
+          set -euo pipefail
+          if [ -n "$APEX_KEYSTORE_B64" ]; then
+            test -n "$APEX_KEYSTORE_PASSWORD" || { echo "::error::APEX_KEYSTORE_PASSWORD is required when APEX_KEYSTORE_B64 is configured"; exit 1; }
+            test -n "$APEX_KEY_ALIAS" || { echo "::error::APEX_KEY_ALIAS is required when APEX_KEYSTORE_B64 is configured"; exit 1; }
+            test -n "$APEX_KEY_PASSWORD" || { echo "::error::APEX_KEY_PASSWORD is required when APEX_KEYSTORE_B64 is configured"; exit 1; }
+            printf '%s' "$APEX_KEYSTORE_B64" | base64 --decode > apex.keystore
+            test -s apex.keystore
+            keytool -list -keystore apex.keystore -storepass "$APEX_KEYSTORE_PASSWORD" -alias "$APEX_KEY_ALIAS" >/dev/null
+            echo "APEX_SIGNING_MODE=production" >> "$GITHUB_ENV"
+          else
+            export APEX_KEYSTORE_PASSWORD=apexbuild
+            export APEX_KEY_ALIAS=apex
+            export APEX_KEY_PASSWORD=apexbuild
+            keytool -genkeypair -noprompt -keystore apex.keystore -storepass "$APEX_KEYSTORE_PASSWORD" -keypass "$APEX_KEY_PASSWORD" -alias "$APEX_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Ape X Development Only"
+            echo "APEX_SIGNING_MODE=development-only" >> "$GITHUB_ENV"
+            echo "::warning::No production keystore configured. This artifact is signed with a temporary development key and cannot update a production app."
+          fi
 
       - name: Build artifact
         working-directory: app
+        env:
+          APEX_KEYSTORE_PASSWORD: ${{ secrets.APEX_KEYSTORE_PASSWORD }}
+          APEX_KEY_ALIAS: ${{ secrets.APEX_KEY_ALIAS }}
+          APEX_KEY_PASSWORD: ${{ secrets.APEX_KEY_PASSWORD }}
+        shell: bash
         run: |
-          ARTIFACT=$(python3 -c "import json;print(json.load(open('../spec.json')).get('artifact','apk'))")
-          if [ "$ARTIFACT" = "aab" ]; then gradle --no-daemon bundleRelease; else gradle --no-daemon assembleRelease; fi
+          set -euo pipefail
+          ARTIFACT=$(python3 -c "import json; print(json.load(open('../spec.json')).get('artifact', 'apk'))")
+          case "$ARTIFACT" in
+            apk) gradle --no-daemon assembleRelease; FILE_GLOB="app/build/outputs/apk/release/*.apk" ;;
+            aab) gradle --no-daemon bundleRelease; FILE_GLOB="app/build/outputs/bundle/release/*.aab" ;;
+            *) echo "::error::Unsupported artifact type: $ARTIFACT (expected apk or aab)"; exit 1 ;;
+          esac
+          compgen -G "$FILE_GLOB" >/dev/null || { echo "::error::Expected build artifact was not produced"; exit 1; }
+          echo "APEX_ARTIFACT_GLOB=$FILE_GLOB" >> "$GITHUB_ENV"
+
+      - name: Verify artifact and report signing mode
+        working-directory: app
+        run: |
+          set -euo pipefail
+          printf 'Signing mode: %s\\n' "$APEX_SIGNING_MODE"
+          ARTIFACT=$(python3 -c "import json; print(json.load(open('../spec.json')).get('artifact', 'apk'))")
+          if [ "$ARTIFACT" = "apk" ]; then
+            APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -size +0c -print -quit)
+            test -n "$APK"
+            SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            test -n "$SDK_ROOT"
+            APKSIGNER=$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)
+            test -x "$APKSIGNER"
+            "$APKSIGNER" verify --verbose --print-certs "$APK"
+          else
+            AAB=$(find app/build/outputs/bundle/release -maxdepth 1 -name '*.aab' -size +0c -print -quit)
+            test -n "$AAB"
+            jarsigner -verify "$AAB"
+          fi
+          find app/build/outputs -type f \\( -name '*.apk' -o -name '*.aab' \\) -size +0c -print
 
       - uses: actions/upload-artifact@v4
         with:
-          name: apex-${{ inputs.build_id }}
+          name: apex-${{ inputs.build_id }}-${{ env.APEX_SIGNING_MODE }}
           if-no-files-found: error
+          retention-days: 7
           path: |
             app/app/build/outputs/apk/release/*.apk
             app/app/build/outputs/bundle/release/*.aab
