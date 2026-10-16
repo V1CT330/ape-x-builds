@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test project generators
+        run: python3 -m unittest discover -s tests -v
+
       - name: Validate build request and write spec
         env:
           SPEC: ${{ inputs.spec }}
