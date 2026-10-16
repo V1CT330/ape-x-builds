@@ -6,9 +6,11 @@ on:
       spec:
         description: "Ape X build spec (JSON)"
         required: true
+        type: string
       build_id:
         description: "Ape X build ID"
         required: true
+        type: string
 
 jobs:
   build:
@@ -18,10 +20,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write build spec
+      - name: Test project generators
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Validate build request and write spec
         env:
           SPEC: ${{ inputs.spec }}
-        run: printf '%s' "$SPEC" > spec.json
+          BUILD_ID: ${{ inputs.build_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          spec = json.loads(os.environ["SPEC"])
+          if not isinstance(spec, dict):
+              raise SystemExit("Build spec must be a JSON object")
+          if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", os.environ["BUILD_ID"]):
+              raise SystemExit("build_id may contain only letters, digits, dot, underscore, and hyphen (max 80 chars)")
+          with open("spec.json", "w", encoding="utf-8") as f:
+              json.dump(spec, f)
+          PY
 
       - name: Generate iOS project
         run: |
@@ -52,8 +68,18 @@ jobs:
         if: ${{ env.APPLE_CERT_P12 != '' }}
         run: echo "Apple signing credentials detected — signing step to be configured."
 
+      - name: Verify generated artifacts
+        run: |
+          set -euo pipefail
+          test -s out/App-unsigned.ipa
+          test -s out/App-xcode-project.zip
+          unzip -t out/App-unsigned.ipa
+          unzip -t out/App-xcode-project.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apex-${{ inputs.build_id }}
+          name: apex-${{ inputs.build_id }}-ios-unsigned
+          if-no-files-found: error
+          retention-days: 7
           path: out/*
