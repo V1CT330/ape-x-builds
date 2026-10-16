@@ -22,3 +22,17 @@ jobs:
         run: python -m py_compile tools/generate_project.py tools/generate_ios_project.py tests/test_generators.py
       - name: Run generator smoke tests
         run: python -m unittest discover -s tests -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Generate Android smoke-test project
+        run: python tools/generate_project.py tests/fixtures/android-spec.json android-smoke
+      - name: Compile generated Android app
+        working-directory: android-smoke
+        run: gradle --no-daemon assembleDebug
+      - name: Verify generated APK
+        run: test -s android-smoke/app/build/outputs/apk/debug/app-debug.apk
