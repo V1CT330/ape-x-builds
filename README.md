@@ -1,6 +1,6 @@
-# Ape X Android Build Runner
+# Ape X Build Runner
 
-Ape X converts a website into an Android application and builds an APK or Android App Bundle (AAB) through GitHub Actions.
+Ape X converts a website into Android and iOS WebView apps through GitHub Actions. Android builds produce APK/AAB artifacts; iOS builds produce an IPA plus the generated Xcode project.
 
 ## Current scope
 
@@ -67,3 +67,23 @@ The workflow validates the configured keystore and verifies the signature on the
 Successful runs upload the APK or AAB as a GitHub Actions artifact for seven days. This runner alone does not implement customer accounts, payment collection/verification, per-customer build ownership, website-side status polling, or authenticated customer download links. Those features must be implemented in the Ape X web application/backend, with payment verified server-side before a customer's build becomes downloadable.
 
 The build attempts to use the site's favicon as the launcher icon. You can optionally set `application.iconUrl` to a public HTTPS image hosted on the start URL's host or another configured allowed host. The icon downloader rejects non-HTTPS, disallowed, private, and internal hosts; if no usable icon is available, the generic fallback icon is retained.
+
+
+## iOS builds
+
+Open **Actions → Ape X iOS Build → Run workflow** and provide the same JSON `spec` object and a unique `build_id` used by the Android workflow. The iOS generator uses `ios.bundleId` when provided, otherwise `application.applicationId`. The website `webview.startUrl` must use HTTPS.
+
+### Optional App Store Connect signing
+
+To produce a signed IPA, configure all four repository secrets:
+
+- `APPLE_CERT_P12`: base64-encoded Apple Distribution .p12 certificate.
+- `APPLE_CERT_PASSWORD`: password for the .p12 file.
+- `APPLE_PROVISIONING_PROFILE_B64`: base64-encoded App Store provisioning profile for the exact bundle ID.
+- `APPLE_TEAM_ID`: Apple Developer Team ID.
+
+Set all four secrets or leave all four empty. Partial configuration fails intentionally. The workflow checks that the profile's application identifier matches the configured team and bundle ID, imports signing assets into a temporary keychain, exports and validates the IPA, and cleans up temporary signing assets. The signed export is configured for App Store Connect distribution; the certificate and provisioning profile must be valid for that distribution method.
+
+If all signing secrets are absent, the workflow builds an **unsigned development IPA** and includes the Xcode project ZIP. An unsigned IPA is not installable like a signed app and must not be presented as a release-ready customer build. All uploaded build artifacts expire after seven days.
+
+CI runs iOS generator regression tests on every push and pull request. The macOS iOS build itself is triggered manually from GitHub Actions.
