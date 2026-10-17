@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080d18">
+<meta name="description" content="Ape X turns your website into an Android app.">
+<title>Ape X — Website to App</title>
+<style>
+:root{color-scheme:dark;--bg:#080d18;--panel:#101827;--line:#263247;--text:#f4f7fb;--muted:#a8b4c7;--lime:#c7f36b;--blue:#7db5ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% 0%,#172a40 0,transparent 42%),var(--bg);color:var(--text);font:16px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{max-width:1080px;margin:auto;padding:26px 22px 64px}.nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0 54px}.brand{display:flex;align-items:center;gap:11px;font-size:1.2rem;font-weight:800;letter-spacing:-.04em}.mark{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--lime);color:#111827;font-weight:950;font-size:1.1rem}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 12px;color:var(--muted);font-size:.82rem}.hero{max-width:760px;margin:0 auto 44px;text-align:center}.eyebrow{color:var(--lime);font-weight:750;text-transform:uppercase;letter-spacing:.16em;font-size:.76rem}.hero h1{font-size:clamp(2.6rem,7vw,5rem);line-height:1.02;letter-spacing:-.065em;margin:18px 0}.hero h1 span{color:var(--lime)}.hero p{max-width:620px;margin:0 auto;color:var(--muted);font-size:1.08rem}.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.8fr);gap:18px;align-items:start}.card{background:linear-gradient(145deg,rgba(20,31,49,.96),rgba(12,19,32,.98));border:1px solid var(--line);border-radius:22px;padding:clamp(20px,4vw,32px);box-shadow:0 24px 70px #0002}.card h2{font-size:1.2rem;margin:0 0 6px;letter-spacing:-.025em}.sub{color:var(--muted);font-size:.92rem;margin:0 0 24px}.label{display:block;font-size:.88rem;font-weight:700;margin:18px 0 8px}.input,select{width:100%;background:#090f1b;border:1px solid #344258;color:var(--text);padding:14px 15px;border-radius:12px;font:inherit;outline:none}.input:focus,select:focus{border-color:var(--lime);box-shadow:0 0 0 3px #c7f3620f}.options{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hint{color:var(--muted);font-size:.8rem;margin-top:7px}.btn{width:100%;margin-top:24px;border:0;border-radius:12px;background:var(--lime);color:#111827;font-weight:850;font-size:1rem;padding:15px;cursor:pointer}.btn:disabled{cursor:not-allowed;opacity:.55}.notice{display:none;margin-top:16px;padding:13px 14px;border:1px solid #6d5427;background:#2b2417;color:#ffe3a1;border-radius:12px;font-size:.9rem}.notice.show{display:block}.steps{display:grid;gap:18px;margin-top:24px}.step{display:grid;grid-template-columns:38px 1fr;gap:12px}.num{width:34px;height:34px;display:grid;place-items:center;border:1px solid #40516a;border-radius:11px;color:var(--lime);font-weight:800}.step strong{display:block;margin-bottom:3px}.step p{margin:0;color:var(--muted);font-size:.9rem}.status{display:flex;gap:10px;align-items:flex-start;margin-top:25px;padding:15px;border:1px solid #31455c;border-radius:14px;background:#0b1422;color:var(--muted);font-size:.87rem}.dot{flex:none;width:9px;height:9px;border-radius:50%;background:#f0bd58;margin-top:6px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:#8390a5;font-size:.8rem;margin-top:34px;padding:0 4px}a{color:var(--blue)}@media(max-width:760px){.nav{padding-bottom:38px}.grid{grid-template-columns:1fr}.hero{margin-bottom:30px}.hero p{font-size:1rem}.wrap{padding:18px 15px 40px}}@media(prefers-reduced-motion:no-preference){.card{animation:rise .45s ease both}.card:nth-child(2){animation-delay:.08s}@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="nav"><div class="brand"><div class="mark">A</div><span>APE X</span></div><div class="pill">Website → Android app</div></header>
+<main>
+<section class="hero"><div class="eyebrow">Your website, in your pocket</div><h1>Turn any website into an <span>Android app.</span></h1><p>Enter your website and prepare an app build with your site’s identity, a clean full-screen experience, and an installable Android package.</p></section>
+<section class="grid">
+<div class="card"><h2>Prepare your app</h2><p class="sub">Start with a public website using HTTPS.</p>
+<form id="build-form">
+<label class="label" for="site-url">Website URL</label><input class="input" id="site-url" name="site-url" type="url" placeholder="https://example.com" autocomplete="url" required>
+<div class="hint">Your website must be publicly accessible over HTTPS.</div>
+<label class="label" for="app-name">App name</label><input class="input" id="app-name" name="app-name" maxlength="40" placeholder="My Website" required>
+<div class="options"><div><label class="label" for="package-type">Package format</label><select id="package-type"><option value="apk">APK — install on Android</option><option value="aab">AAB — Play Store upload</option></select></div><div><label class="label" for="orientation">Orientation</label><select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option><option value="unspecified">Auto rotate</option></select></div></div>
+<button class="btn" type="submit" id="submit-btn" disabled>Build service not connected yet</button>
+<div class="notice show" id="notice" role="status">The website interface is loading correctly, but the secure build-submission backend is not connected yet. No build or payment will be started from this page.</div>
+</form></div>
+<aside class="card"><h2>How Ape X works</h2><p class="sub">A simple path from website to app.</p>
+<div class="steps"><div class="step"><div class="num">01</div><div><strong>Enter your website</strong><p>Provide the secure URL and choose your app settings.</p></div></div><div class="step"><div class="num">02</div><div><strong>Build the Android app</strong><p>The build service packages your website into an Android app.</p></div></div><div class="step"><div class="num">03</div><div><strong>Download your package</strong><p>Get your generated APK or AAB when the build and access checks are complete.</p></div></div></div>
+<div class="status"><span class="dot"></span><div><strong style="color:var(--text)">Setup in progress</strong><br>The build runner exists; secure customer submissions, build tracking, payment verification, and private downloads still need to be connected.</div></div>
+</aside>
+</section>
+</main>
+<footer class="footer"><span>© <span id="year"></span> Ape X</span><span>Build safely. Download securely.</span></footer>
+</div>
+<script>
+document.getElementById('year').textContent=new Date().getFullYear();
+document.getElementById('build-form').addEventListener('submit',function(e){e.preventDefault();const raw=document.getElementById('site-url').value.trim();try{const u=new URL(raw);if(u.protocol!=='https:'){throw new Error('https')}document.getElementById('notice').textContent='Your website URL looks valid. The build service is not connected yet, so no build has been started and no payment has been taken.';document.getElementById('notice').classList.add('show');}catch(_){document.getElementById('notice').textContent='Please enter a valid public HTTPS website URL, such as https://example.com.';document.getElementById('notice').classList.add('show');}});
+</script>
+</body>
+</html>
