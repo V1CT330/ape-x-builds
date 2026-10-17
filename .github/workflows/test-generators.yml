@@ -61,4 +61,4 @@ jobs:
           AAB=android-smoke/app/build/outputs/bundle/release/app-release.aab
           test -s "$AAB"
           jarsigner -verify "$AAB"
-          unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\\.(SF|RSA|DSA)$'
+          unzip -Z1 "$AAB" | grep -Eq '^META-INF/[^/]+\.(SF|RSA|DSA)$'
