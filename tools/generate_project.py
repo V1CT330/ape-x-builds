@@ -124,6 +124,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.webkit.*;
 
 public class MainActivity extends Activity {{
@@ -144,6 +145,12 @@ public class MainActivity extends Activity {{
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(true);
+    s.setAllowFileAccess(false);
+    s.setAllowContentAccess(false);
+    s.setAllowFileAccessFromFileURLs(false);
+    s.setAllowUniversalAccessFromFileURLs(false);
+    s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) s.setSafeBrowsingEnabled(true);
     s.setUserAgentString(s.getUserAgentString() + " " + {json.dumps(ua)});
     CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
     web.setWebViewClient(new WebViewClient() {{
