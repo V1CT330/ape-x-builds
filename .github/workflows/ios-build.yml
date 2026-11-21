@@ -19,11 +19,6 @@ jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 35
-    env:
-      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
-      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-      APPLE_PROVISIONING_PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE_B64 }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +50,11 @@ jobs:
 
       - name: Validate Apple signing configuration
         id: signing
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE_B64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           configured=0
@@ -77,6 +77,10 @@ jobs:
         id: apple
         env:
           SPEC: ${{ inputs.spec }}
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE_B64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           KEYCHAIN_PATH="$RUNNER_TEMP/apex-signing.keychain-db"
@@ -115,6 +119,7 @@ jobs:
           PROFILE_UUID: ${{ steps.apple.outputs.profile_uuid }}
           KEYCHAIN_PATH: ${{ steps.apple.outputs.keychain_path }}
           BUNDLE_ID: ${{ steps.apple.outputs.bundle_id }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           xcodebuild -project ios/App.xcodeproj -scheme App -configuration Release \
