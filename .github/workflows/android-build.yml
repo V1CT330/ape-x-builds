@@ -19,11 +19,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      APEX_KEYSTORE_B64: ${{ secrets.APEX_KEYSTORE_B64 }}
-      APEX_KEYSTORE_PASSWORD: ${{ secrets.APEX_KEYSTORE_PASSWORD }}
-      APEX_KEY_ALIAS: ${{ secrets.APEX_KEY_ALIAS }}
-      APEX_KEY_PASSWORD: ${{ secrets.APEX_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +62,11 @@ jobs:
 
       - name: Prepare signing key
         working-directory: app/app
+        env:
+          APEX_KEYSTORE_B64: ${{ secrets.APEX_KEYSTORE_B64 }}
+          APEX_KEYSTORE_PASSWORD: ${{ secrets.APEX_KEYSTORE_PASSWORD }}
+          APEX_KEY_ALIAS: ${{ secrets.APEX_KEY_ALIAS }}
+          APEX_KEY_PASSWORD: ${{ secrets.APEX_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail

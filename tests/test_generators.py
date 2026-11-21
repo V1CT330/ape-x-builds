@@ -53,7 +53,14 @@ class GeneratorSmokeTests(unittest.TestCase):
         self.assertIn("app/src/main/AndroidManifest.xml", files)
         self.assertIn("app/src/main/res/mipmap/ic_launcher.xml", files)
         self.assertIn("app/src/main/java/mw/apex/smoketest/MainActivity.java", files)
-        self.assertIn('"example.com"', files["app/src/main/java/mw/apex/smoketest/MainActivity.java"])
+        java_source = files["app/src/main/java/mw/apex/smoketest/MainActivity.java"]
+        self.assertIn('"example.com"', java_source)
+        self.assertIn("setAllowFileAccess(false)", java_source)
+        self.assertIn("setAllowContentAccess(false)", java_source)
+        self.assertIn("setAllowFileAccessFromFileURLs(false)", java_source)
+        self.assertIn("setAllowUniversalAccessFromFileURLs(false)", java_source)
+        self.assertIn("MIXED_CONTENT_NEVER_ALLOW", java_source)
+        self.assertIn("setSafeBrowsingEnabled(true)", java_source)
 
     def test_android_rejects_http_start_url(self):
         spec = json.loads(json.dumps(SPEC))
